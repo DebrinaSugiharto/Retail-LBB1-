@@ -1,0 +1,388 @@
+---
+title: "Programming for Data Science - Retail Dataset"
+author: "Debrina"
+date: "3 January 2020"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_depth: 2
+    df_print: paged
+    highlight: zenburn
+    css: style.css
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+```
+```{r echo=FALSE, message=FALSE}
+library(ggplot2)
+library(plotly)
+theme_algoritma <- theme(legend.key = element_rect(fill="black"),
+                         legend.background = element_rect(color="white", fill="#263238"),
+                         plot.subtitle = element_text(size=6, color="white"),
+                         panel.background = element_rect(fill="#dddddd"),
+                         panel.border = element_rect(fill=NA),
+                         panel.grid.minor.x = element_blank(),
+                         panel.grid.major.x = element_blank(),
+                         panel.grid.major.y = element_line(color="darkgrey", linetype=2),
+                         panel.grid.minor.y = element_blank(),
+                         plot.background = element_rect(fill="#263238"),
+                         text = element_text(color="white"),
+                         axis.text = element_text(color="white")
+)
+```
+# Explanation
+I will use data retail.csv to fulfill my LBB assignment (Learning By Building)
+
+
+# Import Data
+Importing data retail.csv from folder data_input. Because of the data format is .csv, so the function to import the data is using data.csv().
+
+```{r}
+retail <- read.csv("data_input/retail.csv", sep = ",")
+```
+
+Preview 5 initial data: 
+
+```{r}
+head(retail,5)
+```
+Preview last data:
+```{r}
+tail(retail,5)
+```
+
+# Data Structure and Conditioning
+
+## Checking data structure `str()`
+Checking data structure and brief information of data retail.csv using `str()`.
+```{r}
+str(retail)
+```
+## Checking total row and column `dim()`
+If we want to get total row and column of a dataframe, we can use `dim()`
+```{r}
+dim(retail)
+```
+
+## General Information from dataset
+1. Object retail is a data.frame or table
+2. Containing 9994 rows
+3. Containing 15 column, with column name as follow:
+```{r}
+names(retail)
+```
+
+4. Some data type need to be adjusted as follow:
+   - Ship.Date => need to be changed from character to date type format
+   - Order.Date  => need to be changed from character to date type format
+   - Category => need to be changed from character to category
+   - Sub.Category => need to be changed from character to category
+   - Segment => need to be changed from character to category
+   - Ship.Mode => need to be changed from character to category
+   - Product.Name => need to be changed from character to category
+   - shiporder_difftime => need to make new column that describe about time duration from order to       shipment
+   - year => need to make new column that describe about year Order.Date
+
+
+## Adjusting data type
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(parsedate)
+library(lubridate)
+retail <- retail %>% 
+   mutate(Ship.Date=parse_date(Ship.Date),
+          Order.Date=parse_date(Order.Date),
+          Category=as.factor(Category),
+          Sub.Category=as.factor(Sub.Category),
+          Segment=as.factor(Segment),
+          Ship.Mode=as.factor(Ship.Mode),
+          shiporder_difftime = difftime(time1 = Ship.Date, 
+                                 time2 = Order.Date,
+                                 units = "day"),
+          Year=lubridate::year(Order.Date),
+          Product.Name=as.factor(Product.Name))
+```
+
+## Checking null value
+
+```{r}
+colSums(is.na(retail))
+```
+Conclusion: no null data from the dataset
+
+# Data Description
+```{r}
+summary(retail)
+```
+
+1. First order occured in Jan 2014 and last order in Dec 2017
+2. The most popular shipping option was Standart Class, and the least shipping option was Same day delivery
+3. Consumer segment has the most buyers and home office segment was the least
+4. Office Supply category was the most sold category compare to Furniture and Technology
+5. Other stuff was the most sold Sub. Category then followed by Binders and paper. Art is the lowest sold Sub.Category
+6. Minimum Sales of the company from Jan 2014 to Dec 2017 was 0.444 and the maximum sales was 22638.48. This company gained the average sales 229.858
+7. Minimum quantity order was 1 and maximum quantity order was 14 from Jan 2014 to Dec 2017, with average 3.79.
+8. Maximum discount that given by the company from Jan 2014 to Dec 2017 was 80%, and the minimum is 0%. Average discount given by the company was 16%
+9. The company gained 8399 as their maximum profit from Jan 2014 to Dec 2017, with profit average 28.657. The company has experienced a loss and remarked as their minimum profit within 4 years at 6599.
+
+
+# Data Analysis
+1. Product Maximum Profit
+
+What product that give maximum profit within 4 years? 
+```{r}
+retail[ retail$Profit == max(retail$Profit),
+       c('Segment','Category','Sub.Category','Product.Name','Year', 'Sales','Quantity','Profit', 'shiporder_difftime')] 
+```
+Maximum profit 8399.976	in 4 years was earned by the company in 2016 from segment Technologies with product name 'Canon imageCLASS 2200 Advanced Copier'.
+
+2. Product Minimum Profit
+
+What product that give minimum profit within 4 years? 
+```{r}
+retail[ retail$Profit == min(retail$Profit),
+       c('Segment','Category','Sub.Category', 'Product.Name','Year','Sales','Quantity','Profit', 'shiporder_difftime')] 
+```
+Minimum profit -6599.978 earned by the company in 2016 and from segment Technologies with product name 'Cubify CubeX 3D Printer Double Head Print'
+
+3. Product Negative Profit
+
+How much products in percentage that give negative profit within 4 years? 
+```{r}
+library(scales)
+negative_profit <- retail[ retail$Profit < 0, c("Product.ID", "Product.Name", "Category", "Profit")]
+percent(nrow(negative_profit)/nrow(retail))
+```
+81% from all transaction has brought profit for the company and 19% has negative profit.
+
+4.  Overall profit
+
+How much total profit gained from all products within 4 years
+```{r}
+sum(retail$Profit)
+```
+In 4 years from January 2014 to December 2017, The company successfully has earned total profit 286397
+
+5. Profit per Category
+```{r message=FALSE}
+profit_category <- retail %>% 
+  group_by(Category) %>%
+  summarise(Total_Profit =  sum(Profit))
+
+profit_category <- profit_category %>% 
+  mutate(remark=paste(Category,":",Total_Profit))
+
+total_profit_cat <- profit_category %>% 
+      ggplot(aes(x=reorder(Category,-Total_Profit),y=Total_Profit,text=remark)) +
+      geom_col(aes(fill = Category),show.legend = F) +
+      labs(title = "Total Profit Per Category",x="Category",y="Total Profit") +
+      theme_algoritma
+    
+    ggplotly(total_profit_cat,tooltip = "text")
+```
+Technologies is one of the most profitable categories with total profit in 4 years is 145454.9481. The smallest profit is coming from Furniture category with total profit is 18451.2728
+
+6. Profit per Segment
+```{r message=FALSE}
+profit_segment <- retail %>% 
+  group_by(Segment) %>%
+  summarise(Total_Profit =  sum(Profit))
+
+profit_segment <- profit_segment %>% 
+  mutate(remark=paste(Segment,":",Total_Profit))
+
+total_profit_seg <- profit_segment %>% 
+      ggplot(aes(x=reorder(Segment,-Total_Profit),y=Total_Profit,text=remark)) +
+      geom_col(aes(fill = Segment),show.legend = F) +
+      labs(title = "Total Profit Per Segment",x="Segment",y="Total Profit") +
+      theme_algoritma
+    
+    ggplotly(total_profit_seg,tooltip = "text")
+```
+Consumer is the most profitable segment in the market for the company with total profit is 134119.2092
+
+7. Profit per Segment and Category
+```{r message=FALSE}
+profit_seg_cat <- retail %>% 
+  group_by(Segment,Category) %>%
+  summarise(Total_Profit =  sum(Profit))
+profit_seg_cat <- profit_seg_cat %>% 
+  mutate(remark=paste(Segment,"&",Category,":",Total_Profit))
+
+total_profit_seg_cat <- profit_seg_cat %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=Segment,y=Total_Profit,fill=Category),position = "dodge") +
+      labs(title = "Total Profit Per Segment & Category",x="Segment",y="Total Profit") +
+      theme_algoritma
+    
+    ggplotly(total_profit_seg_cat,tooltip = "text")
+```
+
+The most profitable segment is Consumer and from category Technologies with total profit 70797.8096
+Technologies is the highest profitable category from all segments, and Furniture is the smallest. 
+
+8. Overall Profit Fluctuation per Year
+```{r message=FALSE}
+yearly_profit <- retail %>% 
+  group_by(Year) %>%
+  summarise(Total_Profit =  sum(Profit))
+
+profit_fluctuation <- yearly_profit %>% 
+  ggplot(aes(x= Year,y=Total_Profit))+
+  geom_line(linetype="dashed", color="blue",size=1.2,group=1)+geom_point(color="black", size=3)+
+  labs(title = "Profit Fluctuation per Year",x="Year", y="Total  Profit")+
+  theme_algoritma
+ggplotly(profit_fluctuation)
+```
+The company's total profit always growing every year.
+
+9. Total Quantity Sold Per Category
+```{r message=FALSE}
+items_sold_category <- retail %>% 
+  group_by(Category) %>%
+  summarise(Total_Items_Sold =  sum(Quantity))
+items_sold_category <- items_sold_category %>% 
+  mutate(remark=paste(Category,":",Total_Items_Sold))
+
+total_items_sold <- items_sold_category %>% 
+      ggplot(aes(x=reorder(Category,-Total_Items_Sold),y=Total_Items_Sold,text=remark)) +
+      geom_col(aes(fill = Category),show.legend = F) +
+      labs(title = "Total Items Sold Per Category",x="Category",y="Quantity") +
+      theme_algoritma
+    
+    ggplotly(total_items_sold,tooltip = "text")
+```
+Technology is actually has the smallest amount of quantity sold by the company, and Office Supplies is the highest.
+
+10. Total Items Sold in 4 years
+```{r}
+sum(items_sold_category$Total_Items_Sold)
+```
+In 4 years from January 2014 to December 2017, The company successfully has sold 37873 items
+
+11. Total Items Sold per Segment and Category
+```{r message=FALSE}
+items_seg_cat <- retail %>% 
+  group_by(Segment,Category) %>%
+  summarise(Quantity =  sum(Quantity))
+items_seg_cat <- items_seg_cat %>% 
+  mutate(remark=paste(Segment,"&",Category,":",Quantity))
+
+total_items_seg_cat <- items_seg_cat %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=Segment,y=Quantity,fill=Category),position = "dodge") +
+      labs(title = "Total Items Sold Per Segment & Category",x="Segment",y="Quantity") +
+      theme_algoritma
+    
+    ggplotly(total_items_seg_cat,tooltip = "text")
+```
+Eventhough the most items of all segments like to buy is Office Supplies category, but the most profitable category from All segments is not coming from Office Supplies, but still coming from Technology
+
+12. Profit per Category and Sub. Category
+```{r message=FALSE}
+profit_seg_subcat <- retail %>% 
+  group_by(Category,Sub.Category) %>%
+  summarise(Profit =  sum(Profit))
+profit_seg_subcat <- profit_seg_subcat %>% 
+  mutate(remark=paste(Category,"&",Sub.Category,":",Profit))
+
+total_profit_seg_subcat <- profit_seg_subcat %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=Category,y=Profit,fill=Sub.Category),position = "dodge") +
+      labs(title = "Total Profit Per Category & Sub.Category",x="Category",y="Profit") +
+      theme_algoritma
+    
+    ggplotly(total_profit_seg_subcat,tooltip = "text")
+```
+The most profitable sub.categories is Copiers and the least is Machines, if we see from Technology category only. But from overall, the least sub. category profit is -17725.48 earned from  Furniture and Tables.
+
+13. Most Profitable Product from Technology category and Copiers Sub.Categories
+```{r message=FALSE}
+profit_tech_copiers <- retail %>% 
+  filter(Category=="Technology" & Sub.Category=="Copiers") %>% 
+  group_by(Product.Name) %>%
+  summarise(Profit =  sum(Profit))
+profit_tech_copiers <- profit_tech_copiers %>% 
+  mutate(remark=paste(Product.Name,":",Profit))
+
+total_profit_tech_copiers <- profit_tech_copiers %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=reorder(Product.Name,-Profit),y=Profit,fill=Product.Name),position = "dodge") +
+      labs(title = "Profit Technology and Copiers",y="Profit",x="")+
+      theme_algoritma + theme(axis.title.x = element_blank())
+    
+    ggplotly(total_profit_tech_copiers,tooltip = "text")
+```
+The company actually sold 13 types of Copiers, but the most profitable copiers are Canon imageCLASS 2200 Advanced Copier, Hewlett Packard LaserJet 3310 Copier, and Canon PC1060 Personal Laser Copier.
+
+14. Fastest Ship Mode 
+
+What is the type of Ship Mode that deliver fastest from order date to ship date?
+
+```{r message=FALSE}
+shipment <- retail %>% 
+  group_by(Ship.Mode) %>%
+  summarise(avg_shipment =  mean(shiporder_difftime))
+shipment <- shipment %>% 
+  mutate(remark=paste(Ship.Mode,":",avg_shipment))
+
+avg_shipment <- shipment %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=reorder(Ship.Mode,-avg_shipment),y=avg_shipment,fill=Ship.Mode),position = "dodge") +
+      labs(title = "Average Shipment",x="Segment",y="Average Shipment") + 
+      theme_algoritma
+    
+    ggplotly(avg_shipment,tooltip = "text")
+```
+The company offer 4 ways of shipment such as Same Day, First Class, Second Class, and Standard Class. The fastest Ship Mode is Same Day with average 0.04 day or only around 1 hour. The slowest Ship Mode is Standard Class with average 5 days of shipment 
+
+15. Highest average discount per category
+```{r message=FALSE}
+discount <- retail %>% 
+  group_by(Category) %>%
+  summarise(avg_disc =  mean(Discount))
+discount <- discount %>% 
+  mutate(remark=paste(Category,":",avg_disc))
+plot_avg_disc <- discount %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=reorder(Category,-avg_disc),y=avg_disc,fill=Category),position = "dodge") +
+      labs(title = "Average Discount",x="Category",y="Average Discount") + 
+      theme_algoritma
+    
+    ggplotly(plot_avg_disc,tooltip = "text")
+```
+The most category that like to give discount is Furniture with average discount 17% and Technology is the smallest with average discount 13%
+
+16. Average Discount by Ship.Mode and Category
+```{r message=FALSE}
+ship_discount <- retail %>% 
+  group_by(Category,Ship.Mode) %>%
+  summarise(avg_disc =  mean(Discount))
+ship_discount <- ship_discount %>% 
+  mutate(remark=paste(Ship.Mode,":",avg_disc))
+plot_avg_ship_disc <- ship_discount %>% 
+      ggplot(aes(text=remark)) +
+      geom_col(aes(x=reorder(Ship.Mode,-avg_disc),y=avg_disc,fill=Category),position = "dodge") +
+      labs(title = "Average Discount by Ship.Mode and Category",x="Ship.Mode",y="Average Discount") + 
+      theme_algoritma
+    
+    ggplotly(plot_avg_ship_disc,tooltip = "text")
+```
+If we break down category with its shipment methods, Furniture category with ship.mode Same Day is the highest type that like to give discount with average discount 18.6%
+
+# Conclusion and Explanation
+
+In 4 years from January 2014 to December 2017, The company successfully has earned total profit 286397 from 37873 items sold. The company's total profit always growing every year. 81% from all transaction has brought profit for the company and 19% has negative profit. They are selling 3 categories such as Furniture, Office Supplies, and Technologies. The company is also eyeing 3 segments in the market which consists of Consumer, Corporate, and Home Office. 
+
+Technologies is one of the most profitable categories with total profit in 4 years is 145454.9481, eventhough Technology is actually has the smallest amount of quantity sold by the company. Maximum profit 8399.976	in 4 years was earned by the company in 2016 from segment Technologies with product name 'Canon imageCLASS 2200 Advanced Copier', but minimum profit -6599.978 was also earned by the company in the same year 2016 and from same segment Technologies with product name 'Cubify CubeX 3D Printer Double Head Print'. The most profitable segment is Consumer and from category Technologies with total profit 70797.8096. Technologies category has 4 sub.categories consist of Accessories, Copiers, Machines, and Phones. The most profitable sub.categories is Copiers and the least is Machines, if we see from Technology category only. But from overall, the least sub. category profit is -17725.48 earned from  Furniture and Tables. The company actually sold 13 types of Copiers, but the most profitable copiers are Canon imageCLASS 2200 Advanced Copier, Hewlett Packard LaserJet 3310 Copier, and Canon PC1060 Personal Laser Copier.
+
+Consumer is the most profitable segment in the market for the company with total profit is 134119.2092. Eventhough the most items they like to buy is Office Supplies category, but the most profitable category from segment consumer is not coming from Office Supplies, but still coming from Technology.
+
+The company offer 4 ways of shipment such as Same Day, First Class, Second Class, and Standard Class. The fastest Ship Mode is Same Day with average 0.04 day or only around 1 hour. The slowest Ship Mode is Standard Class with average 5 days of shipment. 
+
+The most category that like to give discount is Furniture with average discount 17% and Technology is the smallest with average discount 13%. If we break down again Furniture category with its shipment methods, Furniture category with ship.mode Same Day is the highest type that like to give discount with average discount 18.6%. 
